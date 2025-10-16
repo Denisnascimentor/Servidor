@@ -3,21 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="styles/style.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">    
+    <link rel="stylesheet" href="src/css/style.css">
     <title>Servidor</title>
 </head>
 <body>
     <header class="navbar">
         <nav>
             <a href="#about">Sobre</a>
-            <a href="#details">Detalhes</a>
+            <!-- <a href="#details">Detalhes</a> -->
             <a href="#contributors">Integrantes</a>
         </nav>
     </header>
     <main>
         <section class="main">
             <h1>Servidor Web do Grupo Oito</h1>
+            <div class="chat-container">
+                <h4>Escolha um tema e entre na sala</h4>
+                <div class="chats-container">
+                    <a href="src/html/tech.html"> <button id="tech-btn" class="chat-btn">Tecnologia</button> </a>
+                    <a href="src/html/game.html"> <button id="game-btn" class="chat-btn">Jogos</button> </a>
+                    <a href="src/html/anything.html"> <button id="anything-btn" class="chat-btn">Assuntos diversos</button> </a>
+                    <a href="src/html/study.html"> <button id="study-btn" class="chat-btn">Estudos</button> </a>
+                </div>
+            </div>
         </section>
         <section id="about" class="about">
             <h2>Sobre</h2>
@@ -27,7 +35,7 @@
             </article>
         </section>
 
-        <section id="details" class="details">
+        <!-- <section id="details" class="details">
             <h2>Detalhes técnicos</h2>
             <div class="details-container">
                 <div class="detail">
@@ -48,7 +56,7 @@
                     <p>Adicionamos e efeitos visuais suaves, tornando a experiência mais moderna e agradável para o usuário.</p>
                 </div>
             </div>
-        </section>
+        </section> -->
 
         <section id="contributors" class="contributors">
             <h2>Integrantes do grupo</h2>
@@ -110,5 +118,7 @@
     <footer>
         <p>Powered by Grupo Oito</p>
     </footer>
+
+    <script src="src/js/script.js"></script>
 </body>
 </html>

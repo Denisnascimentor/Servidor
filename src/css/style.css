@@ -49,10 +49,37 @@ nav a :hover{
     background-color: var(--blue);
     color: var(--light-gray);
     text-align: center;
+
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
-    padding: 2rem;
+    padding: 5rem 2rem;
+}
+
+.chat-container {
+    margin-top: 2rem;
+    border: 1px solid var(--blue);
+    border-radius: 15px;
+    padding: 1.5rem;
+    background-color: #fff;
+    color: var(--blue);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+    transition: all 300ms ease;
+}
+
+.chats-container {
+    margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+
+.chat-btn {
+    cursor: pointer;
+    background-color: var(--dark-blue);
+    color: var(--light-gray);
+    padding: 10px 20px;
+    width: 100%;
 }
 
 .about, .details, .contributors {
@@ -151,7 +178,10 @@ footer {
 
 @media (min-width: 768px) {
     .main{
-        padding-top: 60px;
+        padding-top: 80px;
+        flex-direction: row;
+        justify-content: space-around;
+
     }
 
     .server-img {
