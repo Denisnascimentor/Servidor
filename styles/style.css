@@ -19,6 +19,7 @@ html {
 body {
     background: var(--light-gray);
     color: var(--dark-blue);
+    /* padding: 0 2rem; */
 }
 
 .navbar{
@@ -164,9 +165,8 @@ footer {
         align-items: center;
     }
 
-    .details-container {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px 1fr));
+    .about, .details, .contributors {
+        padding: 0 4rem;
     }
 
     .contributors-container {
