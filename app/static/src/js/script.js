@@ -62,8 +62,6 @@ function setupWebSocketHandlers() {
 
   ws.onclose = () => {
     addNotification("Você foi desconectado.");
-    // Opcional: Redirecionar para o início
-    // setTimeout(() => { window.location.href = "/index.html"; }, 3000);
   };
 
   ws.onerror = (error) => {

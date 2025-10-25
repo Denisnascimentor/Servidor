@@ -5,10 +5,10 @@ from typing import Dict, List
 
 app = FastAPI()
 
-# --- CORREÇÃO AQUI ---
+
 app.mount("/images", StaticFiles(directory="app/static/images"), name="images")
 app.mount("/src", StaticFiles(directory="app/static/src"), name="src")
-# --------------------
+
 
 class ConnectionManager:
     def __init__(self):
@@ -63,10 +63,10 @@ manager = ConnectionManager()
 
 @app.get("/")
 async def get():
-    # --- CORREÇÃO AQUI ---
+    
     with open("app/static/index.html", "r") as f:
         return HTMLResponse(f.read())
-# --------------------
+
 
 @app.get("/api/rooms")
 async def get_rooms():

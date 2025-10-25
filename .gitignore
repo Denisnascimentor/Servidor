@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 .env
 
-# Docker (se estiver usando local)
+# Docker
 .dockerignore
 docker-compose.override.yml
 
