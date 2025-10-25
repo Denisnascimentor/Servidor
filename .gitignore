@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+.env
+
+# Docker (se estiver usando local)
+.dockerignore
+docker-compose.override.yml
+
+# IDE/OS
+.vscode/
+.DS_Store
