@@ -19,7 +19,6 @@ html {
 body {
     background: var(--light-gray);
     color: var(--dark-blue);
-    /* padding: 0 2rem; */
 }
 
 .navbar{

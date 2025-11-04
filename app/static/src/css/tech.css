@@ -19,6 +19,7 @@ html {
 body {
     background: var(--light-gray);
     color: var(--dark-blue);
+    font-size: medium;
 }
 
 main {
@@ -46,18 +47,194 @@ main {
     display: block;
 }
 
-.main-section {
-    margin: 0 2rem;
+.name-section {
+    border: 2px solid var(--dark-blue);
+    padding: 3rem;
+    border-radius: 1rem;
+    background-color: white;
+}
+
+.label-input {
+    font-weight: bold;
+    margin-bottom: .2rem;
+}
+
+.text-input {
+    padding: .5rem;
     border: 1px solid var(--blue);
-    border-radius: 15px;
+    border-radius: 5px;
+}
+
+.buttons-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin-top: .3rem;
+    height: 2.5rem;
+}
+
+.enter-btn {
+    cursor: pointer;
+    background-color: var(--dark-blue);
+    color: var(--light-gray);
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    transition: background-color 300ms ease;
+} 
+
+.enter-btn:hover {
+    background-color: var(--light-blue);
+    color: var(--blue);
+}
+
+.back-btn {
+    cursor: pointer;
+    background-color: var(--light-blue);
+    color: var(--blue);
+
+    padding: 10px 20px;
+
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    text-decoration: none;
+
+    height: 2.2rem;
+
+    text-align: center;
+    font-size: 16px;
+
+    transition: background-color 300ms ease;
+}
+
+.back-btn:hover {
+    background-color: var(--dark-blue);
+    color: var(--light-gray);
+}
+
+
+
+
+
+/* .main-section {
+    border: 1px solid var(--blue);
+    border-radius: 1rem;
     padding: 2rem;
     background-color: #fff;
     color: var(--blue);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+    font-size: 1rem;
+} */
+
+.main-section {
+    border: 1px solid var(--blue);
+    border-radius: 1rem;
+    padding: 1rem;
+    margin: 0 1rem;
+
+    background-color: white;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
 }
+
+.div-back {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.out-btn, .btn-submit {
+    cursor: pointer;
+    background-color: var(--light-blue);
+    color: var(--blue);
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    text-decoration: none;
+    transition: all 300ms ease;
+}
+
+.btn-submit {
+    background-color: var(--blue);
+    color: white;
+}
+
+.btn-submit:hover {
+    background-color: var(--light-blue);
+    color: var(--blue);
+}
+
+.chat-layout {
+    margin-top: 1rem;
+    display: flex;
+    height: 70vh;
+    width: 85vw;
+    border: 1px solid var(--blue);
+    border-radius: 1rem;
+}
+
+.users-container {
+    width: 40%;
+    border-right: 1px solid var(--blue);
+    border-top-left-radius: 1rem;
+    border-bottom-left-radius: 1rem;
+    padding: 10px;
+    background: var(--light-gray);
+    overflow-y: auto;
+}
+
+.users-container h3, .chat-messages h3 {
+    margin-top: 0;
+}
+
+.users-list {
+    list-style: none;
+    padding: 0;
+}
+
+.chat-window {
+    width: 10rem;
+    flex-grow: 1; 
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-messages {
+    flex-grow: 1;
+    padding: 10px;
+    overflow-y: auto;
+}
+
+.message-form {
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    border-top: 1px solid var(--blue);
+}
+
+.message-input {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid var(--blue);
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+
+.notification {
+    font-style: italic;
+    color: #888;
+} 
 
 @media (min-width: 768px) { 
     body{
         font-size: 1.5rem;
+    }
+
+    .chat-layout {
+        height: 70vh;
+        width: 70vw;
     }
 }
