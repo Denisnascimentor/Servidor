@@ -115,20 +115,6 @@ main {
     color: var(--light-gray);
 }
 
-
-
-
-
-/* .main-section {
-    border: 1px solid var(--blue);
-    border-radius: 1rem;
-    padding: 2rem;
-    background-color: #fff;
-    color: var(--blue);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-    font-size: 1rem;
-} */
-
 .main-section {
     border: 1px solid var(--blue);
     border-radius: 1rem;
@@ -146,7 +132,7 @@ main {
     margin-top: 1rem;
 }
 
-.out-btn, .btn-submit {
+.out-btn, .btn-submit, .btn-img {
     cursor: pointer;
     background-color: var(--light-blue);
     color: var(--blue);
@@ -157,12 +143,12 @@ main {
     transition: all 300ms ease;
 }
 
-.btn-submit {
+.btn-submit, .btn-img {
     background-color: var(--blue);
     color: white;
 }
 
-.btn-submit:hover {
+.btn-submit:hover, .btn-img:hover {
     background-color: var(--light-blue);
     color: var(--blue);
 }
