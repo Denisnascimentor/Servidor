@@ -17,7 +17,7 @@
                 <input class="text-input" type="text" id="text-input">
                 <div class="buttons-container">
                     <a class="back-btn" href="/">Voltar</a>
-                    <button class="enter-btn" onclick="enterChat('tecnologia')">Entrar</button>
+                    <button class="enter-btn" onclick="enterChat('assuntos diversos')">Entrar</button>
                 </div>
             </div>
         </section>
@@ -37,18 +37,36 @@
                         <h3>Mensagens</h3>
                     </div>
 
+                    <div id="image-preview-area" class="image-preview-area" style="display: none;">
+                        <div class="image-preview-header">
+                            <h4>Pré-visualizar Imagem</h4>
+                            <button id="close-preview-button" class="close-preview-button">&times;</button>
+                        </div>
+                        <div class="image-preview-content">
+                            <img id="preview-image" src="" alt="Pré-visualização da Imagem" style="max-width: 100%; max-height: 200px; border-radius: 8px;">
+                        </div>
+                    </div>
                     <form id="message-form" class="message-form">
                         <input id="message-input" class="message-input" type="text" placeholder="Digite sua mensagem..." autocomplete="off">
+                        <input type="file" id="image-input" accept="image/*" style="display: none;">
+
                         <div class="buttons">
-                            <button class="btn-img">Imagem</button>
+                            <button type="button" id="image-button" class="btn-img">Imagem</button>
                             <button class="btn-submit" type="submit">Enviar</button>
-                        </div>                    
+                        </div>
                     </form>
                 </div>
 
             </div>
             <div class="div-back"><a class="back-btn" href="/">Sair da Sala</a></div>
         </section>
+
+        <div id="image-lightbox" class="image-lightbox" style="display: none;">
+            <span id="lightbox-close" class="lightbox-close">&times;</span>
+            <img class="lightbox-content" id="lightbox-image">
+            <div id="lightbox-caption" class="lightbox-caption"></div>
+        </div>
+
     </main>
 
     <script src="../js/script.js"></script>
