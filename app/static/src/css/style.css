@@ -75,10 +75,27 @@ nav a :hover{
 
 .chat-btn {
     cursor: pointer;
-    background-color: var(--dark-blue);
-    color: var(--light-gray);
+    background-color: var(--blue);
+    color: white;
+
     padding: 10px 20px;
+
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    text-decoration: none;
+
+    height: 2.2rem;
     width: 100%;
+
+    text-align: center;
+    font-size: 16px;
+    transition: background-color 300ms ease;
+}
+
+.chat-btn:hover {
+    background-color: var(--light-blue);
+    color: var(--blue);
 }
 
 .about, .details, .contributors {
