@@ -15,3 +15,7 @@
 * Backend: Python (`websockets`)
 * Frontend: JavaScript, HTML, CSS
 * Hospedagem: VPS Linux (SSH + Git)
+
+### Observação sobre QUIC
+O suporte ao protocolo QUIC/HTTP3 depende da hospedagem e **não é requisito do trabalho**.  
+Quando disponível, apenas melhora o carregamento do frontend.

@@ -1,12 +1,12 @@
-# Deploy — VPS (kaio.baselinux.net)
+# Deploy — VPS (formigarei.com.br)
 
-Este documento descreve como realizar o **deploy** do projeto Servidor Web do Grupo Oito, hospedado na VPS **https://kaio.baselinux.net**.
+Este documento descreve como realizar o **deploy** do projeto Servidor Web do Grupo Oito, hospedado na VPS **formigarei.com.br**.
 
 ---
 
 ## 🚀 Ambiente de Produção
 
-- **Servidor:** kaio.baselinux.net (Linux)
+- **Servidor:** formigarei.com.br (Linux)
 
 
 ---
