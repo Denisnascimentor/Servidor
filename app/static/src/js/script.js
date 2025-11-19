@@ -225,16 +225,15 @@ function setupVideoCall() {
     toggleCamBtn.onclick = toggleCam;
 }
 
-// Função auxiliar para pegar mídia sem erro fatal
 async function getFlexibleMediaStream() {
     try {
         return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     } catch (err) {
-        console.warn("Sem câmera/microfone completo. Tentando só áudio...");
+        console.warn("Tentando só áudio...");
         try {
             return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
         } catch (errAudio) {
-            console.error("Sem dispositivos. Modo Espectador.");
+            console.error("Sem dispositivos.");
             return null;
         }
     }
@@ -257,9 +256,7 @@ function createPeerConnection() {
 
     peerConnection.ontrack = (event) => {
         console.log(">>> STREAM REMOTO RECEBIDO <<<");
-        if (remoteVideo.srcObject !== event.streams[0]) {
-            remoteVideo.srcObject = event.streams[0];
-        }
+        remoteVideo.srcObject = event.streams[0];
     };
 }
 
@@ -269,8 +266,7 @@ async function startCall() {
     iceCandidatesQueue = [];
 
     createPeerConnection();
-
-    // Tenta pegar mídia, mas não deixa travar se falhar
+    
     localStream = await getFlexibleMediaStream();
     updateLocalControls();
     addLocalTracksToConnection();
@@ -292,25 +288,23 @@ async function handleSignalMessage(msg) {
     if (msg.signal_type === "offer") {
         if (isCaller) return; 
 
-        console.log("Recebi Oferta. Iniciando handshake...");
+        console.log("Recebi Oferta. Processando...");
         callModal.style.display = "flex";
-        iceCandidatesQueue = [];
+        
+        // NÃO LIMPAMOS MAIS A FILA AQUI (O ERRO ERA ESSE)
+        // iceCandidatesQueue = []; <--- REMOVIDO
 
-        // 1. CRIA A CONEXÃO PRIMEIRO (Vital!)
         createPeerConnection();
 
-        // 2. SETA O REMOTO IMEDIATAMENTE (Desbloqueia a fila)
+        // Define Remoto e IMEDIATAMENTE processa o que estava na fila
         await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.offer));
-        
-        // 3. PROCESSA A FILA QUE ESTAVA ESPERANDO
         await processIceQueue();
 
-        // 4. AGORA SIM, com calma, tenta pegar a câmera/mic
+        // Depois pega mídia local
         localStream = await getFlexibleMediaStream();
         updateLocalControls();
         addLocalTracksToConnection();
 
-        // 5. Responde
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
         
@@ -354,19 +348,19 @@ function addLocalTracksToConnection() {
         });
     } 
     
-    // SEMPRE adiciona transceivers para garantir que podemos receber vídeo
-    // mesmo que a gente não mande nada
     peerConnection.addTransceiver('audio', { direction: 'recvonly' });
     peerConnection.addTransceiver('video', { direction: 'recvonly' });
 }
 
 async function processIceQueue() {
-    console.log(`Processando ${iceCandidatesQueue.length} candidatos da fila...`);
-    while (iceCandidatesQueue.length > 0) {
-        const candidate = iceCandidatesQueue.shift();
-        try {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (e) { console.error("Erro fila ICE:", e); }
+    if(iceCandidatesQueue.length > 0) {
+        console.log(`Processando ${iceCandidatesQueue.length} candidatos da fila...`);
+        while (iceCandidatesQueue.length > 0) {
+            const candidate = iceCandidatesQueue.shift();
+            try {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (e) { console.error("Erro fila ICE:", e); }
+        }
     }
 }
 
