@@ -2,4 +2,4 @@ fastapi
 uvicorn
 websockets
 python-multipart
-jinja2  <-- (caso use templates, mas seu código parece usar static files puros)
+jinja2
