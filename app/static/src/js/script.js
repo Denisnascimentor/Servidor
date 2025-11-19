@@ -69,9 +69,7 @@ function enterChat(roomName) {
 function setupWebSocketHandlers() {
     ws.onmessage = async (event) => {
         const msg = JSON.parse(event.data);
-        // Debug para ver o que chega
-        if(msg.type !== 'signal') console.log("WS:", msg.type); 
-
+        
         switch (msg.type) {
             case "chat":
                 addChatMessage(msg.sender, msg.content);
@@ -86,8 +84,7 @@ function setupWebSocketHandlers() {
                 updateUserList(msg.users);
                 break;
             case "signal":
-                // Processa sinais WebRTC sem bloquear o loop principal
-                handleSignalMessage(msg).catch(err => console.error("Erro signal:", err));
+                handleSignalMessage(msg).catch(err => console.error("Erro Signal:", err));
                 break;
         }
     };
@@ -228,6 +225,7 @@ function setupVideoCall() {
     toggleCamBtn.onclick = toggleCam;
 }
 
+// Função auxiliar para pegar mídia sem erro fatal
 async function getFlexibleMediaStream() {
     try {
         return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -236,7 +234,7 @@ async function getFlexibleMediaStream() {
         try {
             return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
         } catch (errAudio) {
-            console.error("Sem nenhum dispositivo de entrada.");
+            console.error("Sem dispositivos. Modo Espectador.");
             return null;
         }
     }
@@ -258,8 +256,10 @@ function createPeerConnection() {
     };
 
     peerConnection.ontrack = (event) => {
-        console.log(">>> RECEBI O VÍDEO/ÁUDIO REMOTO! <<<");
-        remoteVideo.srcObject = event.streams[0];
+        console.log(">>> STREAM REMOTO RECEBIDO <<<");
+        if (remoteVideo.srcObject !== event.streams[0]) {
+            remoteVideo.srcObject = event.streams[0];
+        }
     };
 }
 
@@ -268,17 +268,13 @@ async function startCall() {
     callModal.style.display = "flex";
     iceCandidatesQueue = [];
 
-    // 1. Tenta pegar mídia local
-    localStream = await getFlexibleMediaStream();
-    updateLocalControls();
-
-    // 2. Cria conexão
     createPeerConnection();
 
-    // 3. Adiciona mídia se tiver
+    // Tenta pegar mídia, mas não deixa travar se falhar
+    localStream = await getFlexibleMediaStream();
+    updateLocalControls();
     addLocalTracksToConnection();
 
-    // 4. Cria oferta
     try {
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
@@ -294,27 +290,27 @@ async function startCall() {
 
 async function handleSignalMessage(msg) {
     if (msg.signal_type === "offer") {
-        // EVITA CONFLITO: Se eu já liguei, ignoro oferta de outros
         if (isCaller) return; 
 
-        console.log("Recebi Oferta. Aceitando...");
+        console.log("Recebi Oferta. Iniciando handshake...");
         callModal.style.display = "flex";
         iceCandidatesQueue = [];
 
-        // --- AQUI ESTÁ A CORREÇÃO PRINCIPAL ---
-        // Primeiro: Cria a conexão e define o Remoto IMEDIATAMENTE
+        // 1. CRIA A CONEXÃO PRIMEIRO (Vital!)
         createPeerConnection();
+
+        // 2. SETA O REMOTO IMEDIATAMENTE (Desbloqueia a fila)
         await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.offer));
         
-        // Segundo: Processa qualquer candidato que estava na fila
+        // 3. PROCESSA A FILA QUE ESTAVA ESPERANDO
         await processIceQueue();
 
-        // Terceiro: SÓ AGORA tenta pegar a câmera (o delay aqui não trava mais a conexão)
+        // 4. AGORA SIM, com calma, tenta pegar a câmera/mic
         localStream = await getFlexibleMediaStream();
         updateLocalControls();
         addLocalTracksToConnection();
 
-        // Quarto: Responde
+        // 5. Responde
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
         
@@ -334,7 +330,7 @@ async function handleSignalMessage(msg) {
         if (peerConnection && peerConnection.remoteDescription) {
             try {
                 await peerConnection.addIceCandidate(new RTCIceCandidate(msg.candidate));
-            } catch (e) { console.error("Erro add candidate", e); }
+            } catch (e) { console.error("Erro candidate:", e); }
         } else {
             console.log("Guardando ICE Candidate na fila...");
             iceCandidatesQueue.push(msg.candidate);
@@ -350,26 +346,27 @@ function addLocalTracksToConnection() {
 
     if (localStream) {
         localStream.getTracks().forEach(track => {
-            // Verifica se já não adicionou pra evitar duplicidade
             const senders = peerConnection.getSenders();
             const alreadyHas = senders.find(s => s.track === track);
             if (!alreadyHas) {
                 peerConnection.addTrack(track, localStream);
             }
         });
-    } else {
-        // Modo Espectador: Adiciona transceptores apenas para receber
-        peerConnection.addTransceiver('audio', { direction: 'recvonly' });
-        peerConnection.addTransceiver('video', { direction: 'recvonly' });
-    }
+    } 
+    
+    // SEMPRE adiciona transceivers para garantir que podemos receber vídeo
+    // mesmo que a gente não mande nada
+    peerConnection.addTransceiver('audio', { direction: 'recvonly' });
+    peerConnection.addTransceiver('video', { direction: 'recvonly' });
 }
 
 async function processIceQueue() {
+    console.log(`Processando ${iceCandidatesQueue.length} candidatos da fila...`);
     while (iceCandidatesQueue.length > 0) {
         const candidate = iceCandidatesQueue.shift();
         try {
             await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error("Erro fila ICE:", e); }
     }
 }
 
@@ -379,12 +376,12 @@ function updateLocalControls() {
         localVideo.muted = true; 
         
         const hasVideo = localStream.getVideoTracks().length > 0;
-        const hasAudio = localStream.getAudioTracks().length > 0;
+        toggleCamBtn.disabled = !hasVideo;
+        toggleMicBtn.disabled = false;
 
         if (!hasVideo) {
             toggleCamBtn.textContent = "Sem Câmera";
             toggleCamBtn.style.backgroundColor = "#ea4335";
-            toggleCamBtn.disabled = true;
         }
     } else {
         localVideo.srcObject = null;
