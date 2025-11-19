@@ -30,7 +30,6 @@ let localStream = null;
 let peerConnection = null;
 let isCaller = false;
 let iceCandidatesQueue = [];
-let isNegotiating = false;
 
 const rtcConfig = {
     iceServers: [
@@ -46,7 +45,6 @@ function enterChat(roomName) {
         return;
     }
 
-    // Detecta se é HTTPS ou HTTP para usar wss ou ws
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${wsProtocol}//${window.location.host}/ws/${roomName}/${nickname}`;
 
@@ -71,7 +69,8 @@ function enterChat(roomName) {
 function setupWebSocketHandlers() {
     ws.onmessage = async (event) => {
         const msg = JSON.parse(event.data);
-        console.log("WS Recebido:", msg.type); // Debug
+        // Debug para ver o que chega
+        if(msg.type !== 'signal') console.log("WS:", msg.type); 
 
         switch (msg.type) {
             case "chat":
@@ -87,7 +86,8 @@ function setupWebSocketHandlers() {
                 updateUserList(msg.users);
                 break;
             case "signal":
-                handleSignalMessage(msg);
+                // Processa sinais WebRTC sem bloquear o loop principal
+                handleSignalMessage(msg).catch(err => console.error("Erro signal:", err));
                 break;
         }
     };
@@ -100,11 +100,12 @@ function setupWebSocketHandlers() {
 // --- CHAT & UI ---
 
 function updateUserList(users) {
-    console.log("Atualizando lista de usuários:", users);
     usersList.innerHTML = "";
     users.forEach((user) => {
         const userElement = document.createElement("li");
         userElement.textContent = user;
+        userElement.style.padding = "5px";
+        userElement.style.borderBottom = "1px solid #ccc";
         usersList.appendChild(userElement);
     });
 }
@@ -229,18 +230,14 @@ function setupVideoCall() {
 
 async function getFlexibleMediaStream() {
     try {
-        // Tenta pegar vídeo e áudio
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        return stream;
+        return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     } catch (err) {
-        console.warn("Falha ao pegar Camera+Mic. Tentando só Mic...", err);
+        console.warn("Sem câmera/microfone completo. Tentando só áudio...");
         try {
-            // Se falhar, tenta só áudio
-            const audioStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-            return audioStream;
+            return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
         } catch (errAudio) {
-            console.error("Falha total de mídia. Modo Espectador.", errAudio);
-            return null; // Retorna null se não tiver nada
+            console.error("Sem nenhum dispositivo de entrada.");
+            return null;
         }
     }
 }
@@ -250,7 +247,6 @@ function createPeerConnection() {
 
     peerConnection = new RTCPeerConnection(rtcConfig);
 
-    // Envia candidatos ICE para o outro lado
     peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
             ws.send(JSON.stringify({
@@ -261,35 +257,28 @@ function createPeerConnection() {
         }
     };
 
-    // Quando chegar vídeo do outro lado
     peerConnection.ontrack = (event) => {
-        console.log("Stream remoto recebido!");
+        console.log(">>> RECEBI O VÍDEO/ÁUDIO REMOTO! <<<");
         remoteVideo.srcObject = event.streams[0];
-        remoteVideo.muted = false; // Garante que não está mutado
     };
-
-    // Se eu tiver mídia local, adiciono à conexão
-    if (localStream) {
-        localStream.getTracks().forEach(track => {
-            peerConnection.addTrack(track, localStream);
-        });
-    } else {
-        // Se sou espectador, aviso que só quero receber
-        peerConnection.addTransceiver('audio', { direction: 'recvonly' });
-        peerConnection.addTransceiver('video', { direction: 'recvonly' });
-    }
 }
 
 async function startCall() {
     isCaller = true;
     callModal.style.display = "flex";
-    iceCandidatesQueue = []; // Limpa fila antiga
+    iceCandidatesQueue = [];
 
+    // 1. Tenta pegar mídia local
     localStream = await getFlexibleMediaStream();
     updateLocalControls();
 
+    // 2. Cria conexão
     createPeerConnection();
 
+    // 3. Adiciona mídia se tiver
+    addLocalTracksToConnection();
+
+    // 4. Cria oferta
     try {
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
@@ -299,99 +288,112 @@ async function startCall() {
             offer: offer
         }));
     } catch (err) {
-        console.error("Erro ao criar oferta:", err);
+        console.error("Erro oferta:", err);
     }
 }
 
 async function handleSignalMessage(msg) {
-    try {
-        if (msg.signal_type === "offer") {
-            // Alguém me ligou
-            if (isCaller) return; // Evita conflito se ambos ligarem
+    if (msg.signal_type === "offer") {
+        // EVITA CONFLITO: Se eu já liguei, ignoro oferta de outros
+        if (isCaller) return; 
 
-            callModal.style.display = "flex";
-            iceCandidatesQueue = []; 
+        console.log("Recebi Oferta. Aceitando...");
+        callModal.style.display = "flex";
+        iceCandidatesQueue = [];
 
-            localStream = await getFlexibleMediaStream();
-            updateLocalControls();
+        // --- AQUI ESTÁ A CORREÇÃO PRINCIPAL ---
+        // Primeiro: Cria a conexão e define o Remoto IMEDIATAMENTE
+        createPeerConnection();
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.offer));
+        
+        // Segundo: Processa qualquer candidato que estava na fila
+        await processIceQueue();
 
-            createPeerConnection();
+        // Terceiro: SÓ AGORA tenta pegar a câmera (o delay aqui não trava mais a conexão)
+        localStream = await getFlexibleMediaStream();
+        updateLocalControls();
+        addLocalTracksToConnection();
 
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.offer));
-            await processIceQueue(); // Processa candidatos que chegaram cedo demais
+        // Quarto: Responde
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        
+        ws.send(JSON.stringify({
+            type: "signal",
+            signal_type: "answer",
+            answer: answer
+        }));
 
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
+    } else if (msg.signal_type === "answer") {
+        console.log("Recebi Resposta.");
+        if (!peerConnection) return;
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.answer));
+        await processIceQueue();
 
-            ws.send(JSON.stringify({
-                type: "signal",
-                signal_type: "answer",
-                answer: answer
-            }));
-
-        } else if (msg.signal_type === "answer") {
-            // Alguém atendeu minha ligação
-            if (!peerConnection) return;
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.answer));
-            await processIceQueue();
-
-        } else if (msg.signal_type === "candidate") {
-            // Chegou um pacote de rota (ICE)
-            if (peerConnection && peerConnection.remoteDescription) {
+    } else if (msg.signal_type === "candidate") {
+        if (peerConnection && peerConnection.remoteDescription) {
+            try {
                 await peerConnection.addIceCandidate(new RTCIceCandidate(msg.candidate));
-            } else {
-                // Se a conexão ainda não tá pronta, guarda na fila
-                console.log("Guardando ICE Candidate na fila...");
-                iceCandidatesQueue.push(msg.candidate);
-            }
-
-        } else if (msg.signal_type === "hangup") {
-            closeModal();
+            } catch (e) { console.error("Erro add candidate", e); }
+        } else {
+            console.log("Guardando ICE Candidate na fila...");
+            iceCandidatesQueue.push(msg.candidate);
         }
-    } catch (error) {
-        console.error("Erro no WebRTC Signal:", error);
+
+    } else if (msg.signal_type === "hangup") {
+        closeModal();
     }
 }
 
-// Função para processar a fila de candidatos ICE atrasados
+function addLocalTracksToConnection() {
+    if (!peerConnection) return;
+
+    if (localStream) {
+        localStream.getTracks().forEach(track => {
+            // Verifica se já não adicionou pra evitar duplicidade
+            const senders = peerConnection.getSenders();
+            const alreadyHas = senders.find(s => s.track === track);
+            if (!alreadyHas) {
+                peerConnection.addTrack(track, localStream);
+            }
+        });
+    } else {
+        // Modo Espectador: Adiciona transceptores apenas para receber
+        peerConnection.addTransceiver('audio', { direction: 'recvonly' });
+        peerConnection.addTransceiver('video', { direction: 'recvonly' });
+    }
+}
+
 async function processIceQueue() {
-    if (!peerConnection || !peerConnection.remoteDescription) return;
-    
     while (iceCandidatesQueue.length > 0) {
         const candidate = iceCandidatesQueue.shift();
         try {
             await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-            console.log("Candidato da fila processado com sucesso.");
-        } catch (e) {
-            console.error("Erro ao processar candidato da fila:", e);
-        }
+        } catch (e) { console.error(e); }
     }
 }
 
 function updateLocalControls() {
     if (localStream) {
         localVideo.srcObject = localStream;
-        localVideo.muted = true; // Muta meu próprio áudio pra não dar eco
+        localVideo.muted = true; 
         
         const hasVideo = localStream.getVideoTracks().length > 0;
         const hasAudio = localStream.getAudioTracks().length > 0;
 
-        toggleCamBtn.disabled = !hasVideo;
-        toggleMicBtn.disabled = !hasAudio;
-
         if (!hasVideo) {
             toggleCamBtn.textContent = "Sem Câmera";
             toggleCamBtn.style.backgroundColor = "#ea4335";
+            toggleCamBtn.disabled = true;
         }
     } else {
-        // Modo Espectador
         localVideo.srcObject = null;
-        toggleMicBtn.disabled = true;
-        toggleCamBtn.disabled = true;
         toggleMicBtn.textContent = "Sem Mic";
         toggleCamBtn.textContent = "Sem Cam";
         toggleMicBtn.style.backgroundColor = "#ea4335";
         toggleCamBtn.style.backgroundColor = "#ea4335";
+        toggleMicBtn.disabled = true;
+        toggleCamBtn.disabled = true;
     }
 }
 
@@ -416,7 +418,6 @@ function closeModal() {
     isCaller = false;
     iceCandidatesQueue = [];
 
-    // Reseta botões
     toggleMicBtn.textContent = "Microfone";
     toggleMicBtn.style.backgroundColor = "#3c4043";
     toggleMicBtn.disabled = false;
