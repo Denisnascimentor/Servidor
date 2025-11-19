@@ -15,7 +15,6 @@ app.mount("/images", StaticFiles(directory="app/static/images"), name="images")
 app.mount("/src", StaticFiles(directory="app/static/src"), name="src")
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-#gerenciamento de conexões
 class ConnectionManager:
     def __init__(self):
         self.rooms: Dict[str, List[WebSocket]] = {}
@@ -65,6 +64,12 @@ class ConnectionManager:
         message = {"type": "notification", "content": content}
         await self.broadcast_json(room_name, message)
 
+    async def broadcast_signal(self, room_name: str, sender_socket: WebSocket, signal_data: dict):
+        if room_name in self.rooms:
+            for connection in self.rooms[room_name]:
+                if connection != sender_socket:
+                    await connection.send_json(signal_data)
+
     async def broadcast_json(self, room_name: str, message: dict):
         if room_name in self.rooms:
             for connection in list(self.rooms[room_name]):
@@ -72,10 +77,9 @@ class ConnectionManager:
                     await connection.send_json(message)
                 except RuntimeError:
                     await self.disconnect(connection, room_name)
-#endpoints
+
 @app.post("/upload")
 async def upload_image(file: UploadFile = File(...)):
-    
     extension = file.filename.split(".")[-1]
     unique_filename = f"{uuid.uuid4()}.{extension}"
     file_path = os.path.join(UPLOAD_DIR, unique_filename)
@@ -97,7 +101,6 @@ async def get_rooms():
 
 manager = ConnectionManager()
 
-#websocket para conteúdo do chat
 @app.websocket("/ws/{room_name}/{nickname}")
 async def websocket_endpoint(websocket: WebSocket, room_name: str, nickname: str):
     await manager.connect(websocket, room_name, nickname)
@@ -112,7 +115,9 @@ async def websocket_endpoint(websocket: WebSocket, room_name: str, nickname: str
                 image_content = data.get("content", None) 
                 await manager.broadcast_image_message(room_name, nickname, data["url"], image_content)
 
-# manuseio de erros
+            elif data["type"] == "signal":
+                await manager.broadcast_signal(room_name, websocket, data)
+
     except (WebSocketDisconnect, json.JSONDecodeError):
         await manager.disconnect(websocket, room_name)
     except Exception as e:

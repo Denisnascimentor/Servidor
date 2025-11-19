@@ -47,14 +47,15 @@
                         </div>
                     </div>
                     <form id="message-form" class="message-form">
-                        <input id="message-input" class="message-input" type="text" placeholder="Digite sua mensagem..." autocomplete="off">
-                        <input type="file" id="image-input" accept="image/*" style="display: none;">
+    <input id="message-input" class="message-input" type="text" placeholder="Digite sua mensagem..." autocomplete="off">
+    <input type="file" id="image-input" accept="image/*" style="display: none;">
 
-                        <div class="buttons">
-                            <button type="button" id="image-button" class="btn-img">Imagem</button>
-                            <button class="btn-submit" type="submit">Enviar</button>
-                        </div>
-                    </form>
+    <div class="buttons">
+        <button type="button" id="image-button" class="btn-img">Imagem</button>
+        <button type="button" id="call-btn" class="btn-img">Áudio/Vídeo</button>
+        <button class="btn-submit" type="submit">Enviar</button>
+    </div>
+</form>
                 </div>
 
             </div>
@@ -66,7 +67,19 @@
             <img class="lightbox-content" id="lightbox-image">
             <div id="lightbox-caption" class="lightbox-caption"></div>
         </div>
+<div id="call-modal" class="call-modal" style="display: none;">
+            <div class="video-wrapper">
+                <video id="remote-video" autoplay playsinline class="remote-video"></video>
+                
+                <video id="local-video" autoplay playsinline muted class="local-video"></video>
+            </div>
 
+            <div class="call-controls">
+                <button id="toggle-mic-btn" class="control-btn">Microfone</button>
+                <button id="toggle-cam-btn" class="control-btn">Câmera</button>
+                <button id="hangup-btn" class="control-btn btn-danger">Encerrar</button>
+            </div>
+        </div>
     </main>
 
     <script src="../js/script.js"></script>

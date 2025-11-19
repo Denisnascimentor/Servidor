@@ -347,3 +347,125 @@ main {
   padding: 10px 0;
   height: 150px;
 }
+
+/* --- CSS do Modal de Chamada (Estilo Google Meet) --- */
+
+/* Fundo escuro que cobre toda a tela */
+.call-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #202124; /* Cinza escuro padrão do Meet */
+    z-index: 2000; /* Acima de tudo */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Container dos vídeos */
+.video-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+/* Vídeo da outra pessoa (Tela Cheia) */
+.remote-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Preenche a tela sem distorcer */
+    background-color: #000;
+}
+
+/* Seu vídeo (Picture-in-Picture) */
+.local-video {
+    position: absolute;
+    bottom: 80px; /* Espaço para os controles */
+    right: 20px;
+    width: 200px; /* Tamanho fixo ou use vw */
+    height: 150px;
+    object-fit: cover;
+    border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    background-color: #333;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    transform: scaleX(-1); /* Espelha o vídeo local */
+    z-index: 2005;
+    transition: all 0.3s ease;
+}
+
+/* Barra de controles (Botões) */
+.call-controls {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 15px;
+    padding: 10px 20px;
+    background-color: rgba(32, 33, 36, 0.9); /* Fundo translúcido */
+    border-radius: 50px;
+    z-index: 2010;
+}
+
+/* Estilo genérico dos botões de controle */
+.control-btn {
+    background-color: #3c4043;
+    color: white;
+    border: none;
+    border-radius: 30px; /* Formato de pílula */
+    padding: 12px 24px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.control-btn:hover {
+    background-color: #5f6368;
+}
+
+/* Botão de Encerrar (Vermelho) */
+#hangup-btn {
+    background-color: #ea4335;
+    color: white;
+    padding: 12px 30px;
+}
+
+#hangup-btn:hover {
+    background-color: #d93025;
+}
+
+/* --- Responsividade para Celular --- */
+@media (max-width: 768px) {
+    .local-video {
+        width: 100px;
+        height: 140px;
+        bottom: 90px;
+        right: 10px;
+    }
+
+    .call-controls {
+        width: 90%;
+        justify-content: space-between;
+        gap: 5px;
+        border-radius: 20px;
+    }
+
+    .control-btn {
+        padding: 10px 15px;
+        font-size: 0.9rem;
+        flex-grow: 1;
+    }
+}
