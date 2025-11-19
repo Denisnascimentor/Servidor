@@ -28,6 +28,7 @@ let selectedFile = null;
 let localStream = null;
 let peerConnection;
 let isCaller = false;
+let iceCandidatesQueue = [];
 
 const rtcConfig = {
     iceServers: [
@@ -356,6 +357,7 @@ async function startCall() {
     }
 
     peerConnection = new RTCPeerConnection(rtcConfig);
+    iceCandidatesQueue = []; 
 
     peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
@@ -415,6 +417,7 @@ async function handleSignalMessage(msg) {
             }
 
             peerConnection = new RTCPeerConnection(rtcConfig);
+            iceCandidatesQueue = [];
 
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
@@ -437,6 +440,8 @@ async function handleSignalMessage(msg) {
             }
 
             await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.offer));
+            await processIceQueue(); 
+
             const answer = await peerConnection.createAnswer();
             await peerConnection.setLocalDescription(answer);
             
@@ -449,17 +454,33 @@ async function handleSignalMessage(msg) {
     } else if (msg.signal_type === "answer") {
         if (peerConnection) {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.answer));
+            await processIceQueue();
         }
     } else if (msg.signal_type === "candidate") {
-        if (peerConnection) {
+        if (peerConnection && peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
             try {
                 await peerConnection.addIceCandidate(new RTCIceCandidate(msg.candidate));
             } catch (e) {
                 console.error("Erro ao adicionar candidato ICE:", e);
             }
+        } else {
+            iceCandidatesQueue.push(msg.candidate);
         }
     } else if (msg.signal_type === "hangup") {
         closeModal();
+    }
+}
+
+async function processIceQueue() {
+    if(peerConnection && peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
+        while(iceCandidatesQueue.length > 0) {
+            const candidate = iceCandidatesQueue.shift();
+            try {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (e) {
+                console.error("Erro ao processar candidato da fila:", e);
+            }
+        }
     }
 }
 
@@ -484,6 +505,7 @@ function closeModal() {
     remoteVideo.srcObject = null;
     callModal.style.display = "none";
     isCaller = false;
+    iceCandidatesQueue = [];
     
     toggleMicBtn.textContent = "Microfone";
     toggleMicBtn.style.backgroundColor = "#3c4043";
