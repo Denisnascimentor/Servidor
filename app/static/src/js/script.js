@@ -15,6 +15,7 @@ const lightboxImage = document.getElementById("lightbox-image");
 const lightboxCaption = document.getElementById("lightbox-caption");
 const lightboxClose = document.getElementById("lightbox-close");
 
+// Elementos de Vídeo
 const callBtn = document.getElementById("call-btn");
 const callModal = document.getElementById("call-modal");
 const localVideo = document.getElementById("local-video");
@@ -26,30 +27,33 @@ const toggleCamBtn = document.getElementById("toggle-cam-btn");
 let ws;
 let selectedFile = null;
 let localStream = null;
-let peerConnection;
+let peerConnection = null;
 let isCaller = false;
 let iceCandidatesQueue = [];
+let isNegotiating = false;
 
 const rtcConfig = {
     iceServers: [
-        { urls: "stun:stun.l.google.com:19302" }
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
     ]
 };
 
 function enterChat(roomName) {
     const nickname = nicknameInput.value.trim();
-
     if (!nickname) {
         alert("Por favor, escolha um apelido.");
         return;
     }
 
+    // Detecta se é HTTPS ou HTTP para usar wss ou ws
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${wsProtocol}//${window.location.host}/ws/${roomName}/${nickname}`;
 
     try {
         ws = new WebSocket(wsUrl);
     } catch (error) {
+        console.error(error);
         alert("Erro ao tentar conectar ao servidor.");
         return;
     }
@@ -67,6 +71,7 @@ function enterChat(roomName) {
 function setupWebSocketHandlers() {
     ws.onmessage = async (event) => {
         const msg = JSON.parse(event.data);
+        console.log("WS Recebido:", msg.type); // Debug
 
         switch (msg.type) {
             case "chat":
@@ -90,36 +95,35 @@ function setupWebSocketHandlers() {
     ws.onclose = () => {
         addNotification("Você foi desconectado.");
     };
+}
 
-    ws.onerror = (error) => {
-        addNotification("Erro de conexão.");
-    };
+// --- CHAT & UI ---
+
+function updateUserList(users) {
+    console.log("Atualizando lista de usuários:", users);
+    usersList.innerHTML = "";
+    users.forEach((user) => {
+        const userElement = document.createElement("li");
+        userElement.textContent = user;
+        usersList.appendChild(userElement);
+    });
 }
 
 function setupMessageSending() {
     if (messageForm) {
         messageForm.onsubmit = async (event) => {
             event.preventDefault();
-
             const messageContent = messageInput.value.trim();
 
-            if (ws.readyState !== WebSocket.OPEN) {
-                addNotification("Não conectado ao chat.");
-                return;
-            }
+            if (ws.readyState !== WebSocket.OPEN) return;
 
             if (selectedFile) {
                 await uploadAndSendMessage(selectedFile, messageContent);
                 selectedFile = null;
                 hideImagePreview();
             } else if (messageContent) {
-                const payload = {
-                    type: "text",
-                    content: messageContent,
-                };
-                ws.send(JSON.stringify(payload));
+                ws.send(JSON.stringify({ type: "text", content: messageContent }));
             }
-
             messageInput.value = "";
         };
     }
@@ -127,7 +131,6 @@ function setupMessageSending() {
 
 function addChatMessage(sender, content) {
     const msgElement = document.createElement("p");
-    msgElement.style.textAlign = "left";
     msgElement.innerHTML = `<strong>${sender}:</strong> ${content}`;
     chatMessages.appendChild(msgElement);
     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -141,28 +144,11 @@ function addNotification(content) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-function updateUserList(users) {
-    usersList.innerHTML = "";
-    users.forEach((user) => {
-        const userElement = document.createElement("li");
-        userElement.textContent = user;
-        usersList.appendChild(userElement);
-    });
-}
+// --- IMAGEM & UPLOAD ---
 
 function setupImageUpload() {
-    if (imageButton) {
-        imageButton.onclick = () => {
-            imageInput.click();
-        };
-    }
-
-    if (closePreviewButton) {
-        closePreviewButton.onclick = () => {
-            hideImagePreview();
-        };
-    }
-
+    if (imageButton) imageButton.onclick = () => imageInput.click();
+    if (closePreviewButton) closePreviewButton.onclick = hideImagePreview;
     if (imageInput) {
         imageInput.onchange = (event) => {
             const file = event.target.files[0];
@@ -180,7 +166,6 @@ function showImagePreview(file) {
     reader.onload = (e) => {
         previewImage.src = e.target.result;
         imagePreviewArea.style.display = "flex";
-        messageInput.placeholder = "Adicionar legenda...";
     };
     reader.readAsDataURL(file);
 }
@@ -189,127 +174,51 @@ function hideImagePreview() {
     imagePreviewArea.style.display = "none";
     previewImage.src = "";
     selectedFile = null;
-    messageInput.value = "";
-    messageInput.placeholder = "Digite sua mensagem...";
 }
 
 async function uploadAndSendMessage(file, caption) {
     const formData = new FormData();
     formData.append("file", file);
-
-    const submitButton = messageForm.querySelector(".btn-submit");
-    const originalButtonText = submitButton.textContent;
-
-    const loadingSpinner = document.createElement("div");
-    loadingSpinner.className = "loading-spinner";
-    submitButton.textContent = "Enviando...";
-    submitButton.disabled = true;
-    submitButton.closest(".buttons").appendChild(loadingSpinner);
-
     try {
-        const response = await fetch("/upload", {
-            method: "POST",
-            body: formData,
-        });
-
-        if (!response.ok) {
-            throw new Error("Falha no upload da imagem.");
-        }
-
+        const response = await fetch("/upload", { method: "POST", body: formData });
+        if (!response.ok) throw new Error("Erro upload");
         const data = await response.json();
-        const imageUrl = data.url;
-
-        const payload = {
-            type: "image",
-            url: imageUrl,
-            content: caption,
-        };
-        ws.send(JSON.stringify(payload));
+        ws.send(JSON.stringify({ type: "image", url: data.url, content: caption }));
     } catch (error) {
-        addNotification("Erro ao enviar imagem: " + error.message);
-    } finally {
-        if (loadingSpinner.parentNode) {
-            loadingSpinner.parentNode.removeChild(loadingSpinner);
-        }
-        submitButton.textContent = originalButtonText;
-        submitButton.disabled = false;
+        addNotification("Erro envio imagem.");
     }
 }
 
 function addImageMessage(sender, url, caption) {
     const msgElement = document.createElement("p");
     msgElement.className = "chat-message";
-    msgElement.style.textAlign = "left";
-
-    const senderElement = document.createElement("strong");
-    senderElement.textContent = sender + ":";
-    msgElement.appendChild(senderElement);
-    msgElement.appendChild(document.createElement("br"));
-
+    msgElement.innerHTML = `<strong>${sender}:</strong><br>`;
+    
     const imgElement = document.createElement("img");
     imgElement.src = url;
-    imgElement.alt = "Imagem enviada por " + sender;
-    imgElement.style.maxWidth = "250px";
-    imgElement.style.borderRadius = "8px";
+    imgElement.style.maxWidth = "200px";
     imgElement.style.marginTop = "5px";
-    imgElement.style.display = "block";
-    imgElement.style.cursor = "pointer";
-
-    imgElement.onclick = () => {
-        openLightbox(url, caption);
-    };
-
+    imgElement.onclick = () => openLightbox(url, caption);
+    
     msgElement.appendChild(imgElement);
-
-    if (caption && caption.trim() !== "") {
-        const captionElement = document.createElement("span");
-        captionElement.style.display = "block";
-        captionElement.style.textAlign = "left";
-        captionElement.style.marginTop = "5px";
-        captionElement.style.fontSize = "0.9em";
-        captionElement.style.wordWrap = "break-word";
-        captionElement.style.maxWidth = "250px";
-        captionElement.textContent = caption;
-        msgElement.appendChild(captionElement);
-    }
-
+    if(caption) msgElement.innerHTML += `<br><span>${caption}</span>`;
+    
     chatMessages.appendChild(msgElement);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
+// --- LIGHTBOX ---
 function setupLightbox() {
-    if (lightboxClose) {
-        lightboxClose.onclick = () => {
-            closeLightbox();
-        };
-    }
-    if (lightbox) {
-        lightbox.onclick = (event) => {
-            if (event.target === lightbox) {
-                closeLightbox();
-            }
-        };
-    }
+    if (lightboxClose) lightboxClose.onclick = () => lightbox.style.display = "none";
+    if (lightbox) lightbox.onclick = (e) => { if(e.target === lightbox) lightbox.style.display = "none"; };
 }
-
 function openLightbox(url, caption) {
-    if (lightbox) {
-        lightboxImage.src = url;
-        if (caption && caption.trim() !== "") {
-            lightboxCaption.textContent = caption;
-            lightboxCaption.style.display = "block";
-        } else {
-            lightboxCaption.style.display = "none";
-        }
-        lightbox.style.display = "block";
-    }
+    lightboxImage.src = url;
+    lightboxCaption.textContent = caption || "";
+    lightbox.style.display = "block";
 }
 
-function closeLightbox() {
-    if (lightbox) {
-        lightbox.style.display = "none";
-    }
-}
+// --- WEBRTC (VÍDEO CHAMADA) ---
 
 function setupVideoCall() {
     callBtn.onclick = startCall;
@@ -320,45 +229,28 @@ function setupVideoCall() {
 
 async function getFlexibleMediaStream() {
     try {
-        return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        // Tenta pegar vídeo e áudio
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        return stream;
     } catch (err) {
-        console.warn("Sem câmera/microfone completo. Tentando apenas áudio...", err);
+        console.warn("Falha ao pegar Camera+Mic. Tentando só Mic...", err);
         try {
-            return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+            // Se falhar, tenta só áudio
+            const audioStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+            return audioStream;
         } catch (errAudio) {
-            console.warn("Sem áudio também. Entrando como espectador.", errAudio);
-            return null;
+            console.error("Falha total de mídia. Modo Espectador.", errAudio);
+            return null; // Retorna null se não tiver nada
         }
     }
 }
 
-async function startCall() {
-    isCaller = true;
-    callModal.style.display = "flex";
-    
-    localStream = await getFlexibleMediaStream();
-
-    if (localStream) {
-        localVideo.srcObject = localStream;
-        toggleMicBtn.disabled = false;
-        toggleCamBtn.disabled = false;
-        
-        const videoTracks = localStream.getVideoTracks();
-        if (videoTracks.length === 0) {
-            toggleCamBtn.textContent = "Sem Câmera";
-            toggleCamBtn.style.backgroundColor = "#ea4335";
-            toggleCamBtn.disabled = true;
-        }
-    } else {
-        toggleMicBtn.disabled = true;
-        toggleCamBtn.disabled = true;
-        toggleMicBtn.style.backgroundColor = "#ea4335";
-        toggleCamBtn.style.backgroundColor = "#ea4335";
-    }
+function createPeerConnection() {
+    if (peerConnection) return;
 
     peerConnection = new RTCPeerConnection(rtcConfig);
-    iceCandidatesQueue = []; 
 
+    // Envia candidatos ICE para o outro lado
     peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
             ws.send(JSON.stringify({
@@ -369,18 +261,34 @@ async function startCall() {
         }
     };
 
+    // Quando chegar vídeo do outro lado
     peerConnection.ontrack = (event) => {
+        console.log("Stream remoto recebido!");
         remoteVideo.srcObject = event.streams[0];
+        remoteVideo.muted = false; // Garante que não está mutado
     };
 
+    // Se eu tiver mídia local, adiciono à conexão
     if (localStream) {
         localStream.getTracks().forEach(track => {
             peerConnection.addTrack(track, localStream);
         });
     } else {
+        // Se sou espectador, aviso que só quero receber
         peerConnection.addTransceiver('audio', { direction: 'recvonly' });
         peerConnection.addTransceiver('video', { direction: 'recvonly' });
     }
+}
+
+async function startCall() {
+    isCaller = true;
+    callModal.style.display = "flex";
+    iceCandidatesQueue = []; // Limpa fila antiga
+
+    localStream = await getFlexibleMediaStream();
+    updateLocalControls();
+
+    createPeerConnection();
 
     try {
         const offer = await peerConnection.createOffer();
@@ -396,121 +304,122 @@ async function startCall() {
 }
 
 async function handleSignalMessage(msg) {
-    if (msg.signal_type === "offer") {
-        if (!isCaller) {
+    try {
+        if (msg.signal_type === "offer") {
+            // Alguém me ligou
+            if (isCaller) return; // Evita conflito se ambos ligarem
+
             callModal.style.display = "flex";
-            
+            iceCandidatesQueue = []; 
+
             localStream = await getFlexibleMediaStream();
+            updateLocalControls();
 
-            if (localStream) {
-                localVideo.srcObject = localStream;
-                
-                const videoTracks = localStream.getVideoTracks();
-                if (videoTracks.length === 0) {
-                    toggleCamBtn.textContent = "Sem Câmera";
-                    toggleCamBtn.style.backgroundColor = "#ea4335";
-                    toggleCamBtn.disabled = true;
-                }
-            } else {
-                toggleMicBtn.disabled = true;
-                toggleCamBtn.disabled = true;
-            }
-
-            peerConnection = new RTCPeerConnection(rtcConfig);
-            iceCandidatesQueue = [];
-
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    ws.send(JSON.stringify({
-                        type: "signal",
-                        signal_type: "candidate",
-                        candidate: event.candidate
-                    }));
-                }
-            };
-
-            peerConnection.ontrack = (event) => {
-                remoteVideo.srcObject = event.streams[0];
-            };
-
-            if (localStream) {
-                localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
-                });
-            }
+            createPeerConnection();
 
             await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.offer));
-            await processIceQueue(); 
+            await processIceQueue(); // Processa candidatos que chegaram cedo demais
 
             const answer = await peerConnection.createAnswer();
             await peerConnection.setLocalDescription(answer);
-            
+
             ws.send(JSON.stringify({
                 type: "signal",
                 signal_type: "answer",
                 answer: answer
             }));
-        }
-    } else if (msg.signal_type === "answer") {
-        if (peerConnection) {
+
+        } else if (msg.signal_type === "answer") {
+            // Alguém atendeu minha ligação
+            if (!peerConnection) return;
             await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.answer));
             await processIceQueue();
-        }
-    } else if (msg.signal_type === "candidate") {
-        if (peerConnection && peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
-            try {
+
+        } else if (msg.signal_type === "candidate") {
+            // Chegou um pacote de rota (ICE)
+            if (peerConnection && peerConnection.remoteDescription) {
                 await peerConnection.addIceCandidate(new RTCIceCandidate(msg.candidate));
-            } catch (e) {
-                console.error("Erro ao adicionar candidato ICE:", e);
+            } else {
+                // Se a conexão ainda não tá pronta, guarda na fila
+                console.log("Guardando ICE Candidate na fila...");
+                iceCandidatesQueue.push(msg.candidate);
             }
-        } else {
-            iceCandidatesQueue.push(msg.candidate);
+
+        } else if (msg.signal_type === "hangup") {
+            closeModal();
         }
-    } else if (msg.signal_type === "hangup") {
-        closeModal();
+    } catch (error) {
+        console.error("Erro no WebRTC Signal:", error);
     }
 }
 
+// Função para processar a fila de candidatos ICE atrasados
 async function processIceQueue() {
-    if(peerConnection && peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
-        while(iceCandidatesQueue.length > 0) {
-            const candidate = iceCandidatesQueue.shift();
-            try {
-                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-            } catch (e) {
-                console.error("Erro ao processar candidato da fila:", e);
-            }
+    if (!peerConnection || !peerConnection.remoteDescription) return;
+    
+    while (iceCandidatesQueue.length > 0) {
+        const candidate = iceCandidatesQueue.shift();
+        try {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            console.log("Candidato da fila processado com sucesso.");
+        } catch (e) {
+            console.error("Erro ao processar candidato da fila:", e);
         }
+    }
+}
+
+function updateLocalControls() {
+    if (localStream) {
+        localVideo.srcObject = localStream;
+        localVideo.muted = true; // Muta meu próprio áudio pra não dar eco
+        
+        const hasVideo = localStream.getVideoTracks().length > 0;
+        const hasAudio = localStream.getAudioTracks().length > 0;
+
+        toggleCamBtn.disabled = !hasVideo;
+        toggleMicBtn.disabled = !hasAudio;
+
+        if (!hasVideo) {
+            toggleCamBtn.textContent = "Sem Câmera";
+            toggleCamBtn.style.backgroundColor = "#ea4335";
+        }
+    } else {
+        // Modo Espectador
+        localVideo.srcObject = null;
+        toggleMicBtn.disabled = true;
+        toggleCamBtn.disabled = true;
+        toggleMicBtn.textContent = "Sem Mic";
+        toggleCamBtn.textContent = "Sem Cam";
+        toggleMicBtn.style.backgroundColor = "#ea4335";
+        toggleCamBtn.style.backgroundColor = "#ea4335";
     }
 }
 
 function endCall() {
-    ws.send(JSON.stringify({
-        type: "signal",
-        signal_type: "hangup"
-    }));
+    ws.send(JSON.stringify({ type: "signal", signal_type: "hangup" }));
     closeModal();
 }
 
 function closeModal() {
-    if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-    }
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         localStream = null;
     }
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+    
     localVideo.srcObject = null;
     remoteVideo.srcObject = null;
     callModal.style.display = "none";
     isCaller = false;
     iceCandidatesQueue = [];
-    
+
+    // Reseta botões
     toggleMicBtn.textContent = "Microfone";
     toggleMicBtn.style.backgroundColor = "#3c4043";
     toggleMicBtn.disabled = false;
-    
     toggleCamBtn.textContent = "Câmera";
     toggleCamBtn.style.backgroundColor = "#3c4043";
     toggleCamBtn.disabled = false;
