@@ -25,7 +25,7 @@ const toggleCamBtn = document.getElementById("toggle-cam-btn");
 
 let ws;
 let selectedFile = null;
-let localStream;
+let localStream = null;
 let peerConnection;
 let isCaller = false;
 
@@ -317,18 +317,42 @@ function setupVideoCall() {
     toggleCamBtn.onclick = toggleCam;
 }
 
+async function getFlexibleMediaStream() {
+    try {
+        return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    } catch (err) {
+        console.warn("Sem câmera/microfone completo. Tentando apenas áudio...", err);
+        try {
+            return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+        } catch (errAudio) {
+            console.warn("Sem áudio também. Entrando como espectador.", errAudio);
+            return null;
+        }
+    }
+}
+
 async function startCall() {
     isCaller = true;
     callModal.style.display = "flex";
     
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localStream = await getFlexibleMediaStream();
+
+    if (localStream) {
         localVideo.srcObject = localStream;
-    } catch (err) {
-        console.error("Erro ao acessar mídia:", err);
-        alert("Não foi possível acessar a câmera ou microfone.");
-        closeModal();
-        return;
+        toggleMicBtn.disabled = false;
+        toggleCamBtn.disabled = false;
+        
+        const videoTracks = localStream.getVideoTracks();
+        if (videoTracks.length === 0) {
+            toggleCamBtn.textContent = "Sem Câmera";
+            toggleCamBtn.style.backgroundColor = "#ea4335";
+            toggleCamBtn.disabled = true;
+        }
+    } else {
+        toggleMicBtn.disabled = true;
+        toggleCamBtn.disabled = true;
+        toggleMicBtn.style.backgroundColor = "#ea4335";
+        toggleCamBtn.style.backgroundColor = "#ea4335";
     }
 
     peerConnection = new RTCPeerConnection(rtcConfig);
@@ -347,9 +371,14 @@ async function startCall() {
         remoteVideo.srcObject = event.streams[0];
     };
 
-    localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, localStream);
-    });
+    if (localStream) {
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
+        });
+    } else {
+        peerConnection.addTransceiver('audio', { direction: 'recvonly' });
+        peerConnection.addTransceiver('video', { direction: 'recvonly' });
+    }
 
     try {
         const offer = await peerConnection.createOffer();
@@ -368,12 +397,21 @@ async function handleSignalMessage(msg) {
     if (msg.signal_type === "offer") {
         if (!isCaller) {
             callModal.style.display = "flex";
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            
+            localStream = await getFlexibleMediaStream();
+
+            if (localStream) {
                 localVideo.srcObject = localStream;
-            } catch (err) {
-                console.error("Erro ao acessar mídia no receptor:", err);
-                return;
+                
+                const videoTracks = localStream.getVideoTracks();
+                if (videoTracks.length === 0) {
+                    toggleCamBtn.textContent = "Sem Câmera";
+                    toggleCamBtn.style.backgroundColor = "#ea4335";
+                    toggleCamBtn.disabled = true;
+                }
+            } else {
+                toggleMicBtn.disabled = true;
+                toggleCamBtn.disabled = true;
             }
 
             peerConnection = new RTCPeerConnection(rtcConfig);
@@ -392,9 +430,11 @@ async function handleSignalMessage(msg) {
                 remoteVideo.srcObject = event.streams[0];
             };
 
-            localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
-            });
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+            }
 
             await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.offer));
             const answer = await peerConnection.createAnswer();
@@ -444,6 +484,14 @@ function closeModal() {
     remoteVideo.srcObject = null;
     callModal.style.display = "none";
     isCaller = false;
+    
+    toggleMicBtn.textContent = "Microfone";
+    toggleMicBtn.style.backgroundColor = "#3c4043";
+    toggleMicBtn.disabled = false;
+    
+    toggleCamBtn.textContent = "Câmera";
+    toggleCamBtn.style.backgroundColor = "#3c4043";
+    toggleCamBtn.disabled = false;
 }
 
 function toggleMic() {
