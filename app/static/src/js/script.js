@@ -84,7 +84,7 @@ function setupWebSocketHandlers() {
                 updateUserList(msg.users);
                 break;
             case "signal":
-                handleSignalMessage(msg).catch(err => console.error("Erro Signal:", err));
+                handleSignalMessage(msg).catch(err => console.error("CRITICAL SIGNAL ERROR:", err));
                 break;
         }
     };
@@ -229,11 +229,11 @@ async function getFlexibleMediaStream() {
     try {
         return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     } catch (err) {
-        console.warn("Tentando só áudio...");
+        console.warn("Câmera falhou ou não existe. Tentando só áudio...");
         try {
             return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
         } catch (errAudio) {
-            console.error("Sem dispositivos.");
+            console.error("Sem nenhum dispositivo de entrada (Mic/Cam).");
             return null;
         }
     }
@@ -255,7 +255,7 @@ function createPeerConnection() {
     };
 
     peerConnection.ontrack = (event) => {
-        console.log(">>> STREAM REMOTO RECEBIDO <<<");
+        console.log(">>> STREAM REMOTO RECEBIDO! <<<");
         remoteVideo.srcObject = event.streams[0];
     };
 }
@@ -272,6 +272,7 @@ async function startCall() {
     addLocalTracksToConnection();
 
     try {
+        console.log("Criando Oferta...");
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
         ws.send(JSON.stringify({
@@ -279,8 +280,9 @@ async function startCall() {
             signal_type: "offer",
             offer: offer
         }));
+        console.log("Oferta enviada!");
     } catch (err) {
-        console.error("Erro oferta:", err);
+        console.error("Erro ao criar oferta:", err);
     }
 }
 
@@ -291,31 +293,37 @@ async function handleSignalMessage(msg) {
         console.log("Recebi Oferta. Processando...");
         callModal.style.display = "flex";
         
-        // NÃO LIMPAMOS MAIS A FILA AQUI (O ERRO ERA ESSE)
-        // iceCandidatesQueue = []; <--- REMOVIDO
-
         createPeerConnection();
 
-        // Define Remoto e IMEDIATAMENTE processa o que estava na fila
+        // 1. Define Remoto
         await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.offer));
+        
+        // 2. Processa fila de ICE
         await processIceQueue();
 
-        // Depois pega mídia local
+        // 3. Pega mídia local (se falhar, continua sem)
         localStream = await getFlexibleMediaStream();
         updateLocalControls();
         addLocalTracksToConnection();
 
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        
-        ws.send(JSON.stringify({
-            type: "signal",
-            signal_type: "answer",
-            answer: answer
-        }));
+        // 4. Cria e Envia Resposta
+        try {
+            console.log("Criando Resposta...");
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            
+            ws.send(JSON.stringify({
+                type: "signal",
+                signal_type: "answer",
+                answer: answer
+            }));
+            console.log("Resposta enviada!");
+        } catch (err) {
+            console.error("Erro fatal ao criar resposta:", err);
+        }
 
     } else if (msg.signal_type === "answer") {
-        console.log("Recebi Resposta.");
+        console.log("Recebi Resposta da outra ponta.");
         if (!peerConnection) return;
         await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.answer));
         await processIceQueue();
@@ -326,7 +334,7 @@ async function handleSignalMessage(msg) {
                 await peerConnection.addIceCandidate(new RTCIceCandidate(msg.candidate));
             } catch (e) { console.error("Erro candidate:", e); }
         } else {
-            console.log("Guardando ICE Candidate na fila...");
+            console.log("Guardando ICE Candidate na fila (Aguardando conexão)...");
             iceCandidatesQueue.push(msg.candidate);
         }
 
@@ -335,21 +343,30 @@ async function handleSignalMessage(msg) {
     }
 }
 
+// --- CORREÇÃO CRÍTICA NA ADIÇÃO DE FAIXAS ---
 function addLocalTracksToConnection() {
     if (!peerConnection) return;
 
+    let hasAudio = false;
+    let hasVideo = false;
+
     if (localStream) {
         localStream.getTracks().forEach(track => {
-            const senders = peerConnection.getSenders();
-            const alreadyHas = senders.find(s => s.track === track);
-            if (!alreadyHas) {
-                peerConnection.addTrack(track, localStream);
-            }
+            // Adiciona a faixa localmente
+            peerConnection.addTrack(track, localStream);
+            if (track.kind === 'audio') hasAudio = true;
+            if (track.kind === 'video') hasVideo = true;
         });
     } 
     
-    peerConnection.addTransceiver('audio', { direction: 'recvonly' });
-    peerConnection.addTransceiver('video', { direction: 'recvonly' });
+    // Só adiciona "recvonly" se NÃO tivermos a faixa local.
+    // Isso evita duplicidade no SDP (que causa erros de conexão)
+    if (!hasVideo) {
+        peerConnection.addTransceiver('video', { direction: 'recvonly' });
+    }
+    if (!hasAudio) {
+        peerConnection.addTransceiver('audio', { direction: 'recvonly' });
+    }
 }
 
 async function processIceQueue() {
